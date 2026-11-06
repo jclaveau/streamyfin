@@ -93,7 +93,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // official id only and the Gradle plugin refuses a build without one, so
   // the fork ships without Firebase: no push notifications.
   config.name = "Streamyfin Fork";
-  config.android = {
+  const forkAndroidConfig = {
     ...config.android,
     package: "io.github.jclaveau.streamyfin",
     // fork-release.yml passes its run number, so each release installs as an
@@ -102,7 +102,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       versionCode: Number(process.env.FORK_VERSION_CODE),
     }),
   };
-  delete config.android.googleServicesFile;
+  delete forkAndroidConfig.googleServicesFile;
+  config.android = forkAndroidConfig;
 
   // Only override googleServicesFile if env var is set
   const androidConfig: { googleServicesFile?: string } = {};
