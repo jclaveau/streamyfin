@@ -367,6 +367,14 @@ function Layout() {
                                           }}
                                         />
                                         <Stack.Screen
+                                          name='(auth)/jellyfin-remote'
+                                          options={{
+                                            headerShown: false,
+                                            presentation: "modal",
+                                            gestureEnabled: true,
+                                          }}
+                                        />
+                                        <Stack.Screen
                                           name='login'
                                           options={{
                                             headerShown: true,

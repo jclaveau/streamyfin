@@ -24,6 +24,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { RECEIVER_LOAD_TIMEOUT_MS } from "@/constants/Cast";
+import useRouter from "@/hooks/useAppRouter";
 import { useHaptic } from "@/hooks/useHaptic";
 import type { ThemeColors } from "@/hooks/useImageColorsReturn";
 import { usePlayMedia } from "@/hooks/usePlayMedia";
@@ -32,6 +33,7 @@ import { useGlobalModal } from "@/providers/GlobalModalProvider";
 import { apiAtom, userAtom } from "@/providers/JellyfinProvider";
 import { useOfflineMode } from "@/providers/OfflineModeProvider";
 import { useSyncPlay } from "@/providers/SyncPlayProvider";
+import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
 import { itemThemeColorAtom } from "@/utils/atoms/primaryColor";
 import { useSettings } from "@/utils/atoms/settings";
 import {
@@ -39,6 +41,7 @@ import {
   currentReceiverName,
   receiverNameFor,
 } from "@/utils/cast/jellyfinReceiver";
+import { playOnJellyfinSession } from "@/utils/cast/jellyfinSessionRemote";
 import { castNotStartedMessage } from "@/utils/cast/receiverLoadErrorMessage";
 import { logAndCaptureError, writeErrorLog } from "@/utils/log";
 import type { PlayRequest } from "@/utils/nativePlayer/playRequest";
@@ -87,6 +90,8 @@ export const PlayButton: React.FC<Props> = ({
   const lightHapticFeedback = useHaptic("light");
   const playMedia = usePlayMedia();
   const { enabled: inSyncPlayGroup } = useSyncPlay();
+  const jellyfinTarget = useAtomValue(jellyfinCastTargetAtom);
+  const router = useRouter();
 
   const handleNormalPlayFlow = useCallback(
     async (positionTicks: number) => {
@@ -101,6 +106,43 @@ export const PlayButton: React.FC<Props> = ({
         offline: isOffline,
         playbackPositionTicks: positionTicks,
       };
+
+      if (jellyfinTarget && api) {
+        showActionSheetWithOptions(
+          {
+            options: [
+              jellyfinTarget.name,
+              t("cast_targets.this_device"),
+              t("cast_targets.cancel"),
+            ],
+            cancelButtonIndex: 2,
+          },
+          async (selectedIndex: number | undefined) => {
+            if (selectedIndex === 1) {
+              await playMedia(playRequest, { item });
+              return;
+            }
+            if (selectedIndex !== 0) return;
+            try {
+              await playOnJellyfinSession(api, jellyfinTarget.sessionId, {
+                itemId: item.Id!,
+                startPositionTicks: positionTicks,
+                mediaSourceId: selectedOptions.mediaSource?.Id ?? undefined,
+                audioStreamIndex: selectedOptions.audioIndex,
+                subtitleStreamIndex: selectedOptions.subtitleIndex,
+              });
+              router.push("/(auth)/jellyfin-remote");
+            } catch (e) {
+              logAndCaptureError("Playing on a Jellyfin session failed", e);
+              Alert.alert(
+                t("player.client_error"),
+                t("cast_targets.play_failed", { name: jellyfinTarget.name }),
+              );
+            }
+          },
+        );
+        return;
+      }
 
       if (!client) {
         await playMedia(playRequest, { item });
@@ -216,6 +258,8 @@ export const PlayButton: React.FC<Props> = ({
     [
       item,
       client,
+      jellyfinTarget,
+      router,
       castDevice,
       api,
       user,
@@ -520,6 +564,11 @@ export const PlayButton: React.FC<Props> = ({
             <Animated.Text style={animatedTextStyle}>
               <Feather name='cast' size={22} />
               <CastButton tintColor='transparent' />
+            </Animated.Text>
+          )}
+          {!client && jellyfinTarget && (
+            <Animated.Text style={animatedTextStyle}>
+              <Feather name='cast' size={22} />
             </Animated.Text>
           )}
           {/* In a group this button plays for everyone in it. Downloads

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import GoogleCast, {
   CastButton,
@@ -8,7 +9,10 @@ import GoogleCast, {
   useMediaStatus,
   useRemoteMediaClient,
 } from "react-native-google-cast";
+import useRouter from "@/hooks/useAppRouter";
+import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
 import { logAndCaptureError } from "@/utils/log";
+import { CastTargetPicker } from "./CastTargetPicker";
 import { HeaderButton, type HeaderButtonProps } from "./common/HeaderButton";
 import { HeaderIcon } from "./common/HeaderIcon";
 
@@ -25,6 +29,9 @@ export function Chromecast(props: Props) {
   const sessionManager = GoogleCast.getSessionManager();
   const discoveryManager = GoogleCast.getDiscoveryManager();
   const mediaStatus = useMediaStatus();
+  const jellyfinTarget = useAtomValue(jellyfinCastTargetAtom);
+  const router = useRouter();
+  const [isPickerVisible, setPickerVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -43,8 +50,10 @@ export function Chromecast(props: Props) {
   return (
     <HeaderButton
       onPress={() => {
-        if (mediaStatus?.currentItemId) CastContext.showExpandedControls();
-        else CastContext.showCastDialog();
+        if (jellyfinTarget) router.push("/(auth)/jellyfin-remote");
+        else if (mediaStatus?.currentItemId) {
+          CastContext.showExpandedControls();
+        } else setPickerVisible(true);
       }}
       {...props}
     >
@@ -57,6 +66,10 @@ export function Chromecast(props: Props) {
         </View>
       ) : null}
       <HeaderIcon name='cast' />
+      <CastTargetPicker
+        visible={isPickerVisible}
+        onClose={() => setPickerVisible(false)}
+      />
     </HeaderButton>
   );
 }

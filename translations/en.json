@@ -867,6 +867,18 @@
     "no_links": "No links",
     "could_not_open_link": "Could not open this link"
   },
+  "cast_targets": {
+    "title": "Play on",
+    "no_targets": "No Chromecast or Jellyfin player found",
+    "other_cast_devices": "Other Cast devices…",
+    "disconnect": "Disconnect",
+    "playing_on": "Playing on",
+    "session_gone": "This player is no longer connected",
+    "nothing_playing": "Nothing playing",
+    "this_device": "This device",
+    "cancel": "Cancel",
+    "play_failed": "Could not start playback on {{name}}"
+  },
   "player": {
     "live": "LIVE",
     "auto_subtitles_enabled": "Subtitles on while muted",
