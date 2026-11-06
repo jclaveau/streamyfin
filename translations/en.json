@@ -877,7 +877,9 @@
     "nothing_playing": "Nothing playing",
     "this_device": "This device",
     "cancel": "Cancel",
-    "play_failed": "Could not start playback on {{name}}"
+    "play_failed": "Could not start playback on {{name}}",
+    "command_failed": "{{name}} did not take the command",
+    "server_unreachable": "Can't reach the server"
   },
   "player": {
     "live": "LIVE",

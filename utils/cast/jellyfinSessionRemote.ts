@@ -77,21 +77,25 @@ export const readRemotePlaybackState = (
 };
 
 /**
- * Skip forward or back, clamped to the item's bounds. A runtime of 0 means
- * the server does not know it, so only the start is a bound.
+ * Skip forward or back as jellyfin-web's seekRelative does: floored at the
+ * start only, a seek past the end is the remote player's to handle.
  */
 export const skipTargetTicks = (
   positionTicks: number,
   skipSeconds: number,
-  runtimeTicks: number,
-): number => {
-  const unclampedTicks = Math.max(
-    positionTicks + skipSeconds * TICKS_PER_SECOND,
-    0,
-  );
-  return runtimeTicks > 0
-    ? Math.min(unclampedTicks, runtimeTicks)
-    : unclampedTicks;
+): number => Math.max(positionTicks + skipSeconds * TICKS_PER_SECOND, 0);
+
+/** `null` when the session is gone from the server. */
+export const fetchRemoteSession = async (
+  api: Api,
+  userId: string,
+  sessionId: string,
+): Promise<SessionInfoDto | null> => {
+  const response = await getSessionApi(api).getSessions({
+    controllableByUserId: userId,
+  });
+  const sessions = Array.isArray(response.data) ? response.data : [];
+  return sessions.find((session) => session.Id === sessionId) ?? null;
 };
 
 export { PlaystateCommand };

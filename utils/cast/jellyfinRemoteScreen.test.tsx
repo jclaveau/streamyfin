@@ -1,8 +1,14 @@
 // Covers app/(auth)/jellyfin-remote.tsx: Expo Router would take a spec under
 // app/ for a route, so it lives with the session helpers the screen uses.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 import { createStore, Provider as JotaiProvider } from "jotai";
+import { Alert } from "react-native";
 import JellyfinRemoteScreen from "@/app/(auth)/jellyfin-remote";
 import { apiAtom } from "@/providers/JellyfinProvider";
 import type { makeApi } from "@/test-utils/jellyfinApi";
@@ -35,6 +41,17 @@ jest.mock("@/components/common/Text", () => ({
   Text: jest.requireActual("react-native").Text,
 }));
 jest.mock("@/utils/log", () => ({ logAndCaptureError: jest.fn() }));
+jest.mock("@/utils/atoms/settings", () => ({
+  useSettings: () => ({
+    settings: { forwardSkipTime: 30, rewindSkipTime: 10 },
+  }),
+}));
+jest.mock("@expo/vector-icons", () => ({
+  Ionicons: ({ name }: { name: string }) =>
+    jest
+      .requireActual("react")
+      .createElement(jest.requireActual("react-native").Text, null, name),
+}));
 
 const renderRemote = async (client: QueryClient) => {
   const store = createStore();
@@ -53,10 +70,11 @@ const renderRemote = async (client: QueryClient) => {
   );
 };
 
+const apiMock = () =>
+  (createStore().get(apiAtom) as unknown as ReturnType<typeof makeApi>).mock;
+
 const answerSessions = (sessions: unknown[]) => {
-  const { mock } = createStore().get(apiAtom) as unknown as ReturnType<
-    typeof makeApi
-  >;
+  const mock = apiMock();
   mock.reset();
   mock.onGet(/\/Sessions/).reply(200, sessions);
 };
@@ -108,5 +126,90 @@ describe("Jellyfin remote screen", () => {
     expect(queryDehydrateOptions.shouldDehydrateQuery?.(query as never)).toBe(
       false,
     );
+  });
+
+  test("skips back by the rewind setting", async () => {
+    answerSessions([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+        PlayState: { PositionTicks: 6e8, IsPaused: false },
+      },
+    ]);
+    apiMock()
+      .onPost(/\/Playing\/Seek/)
+      .reply(204);
+
+    await renderRemote(new QueryClient());
+    fireEvent.press(await screen.findByText("play-back"));
+
+    await waitFor(() =>
+      expect(apiMock().history.post[0].url).toBe(
+        "https://jellyfin.example.com/Sessions/desktop-session/Playing/Seek?seekPositionTicks=500000000",
+      ),
+    );
+  });
+
+  test("skips forward past the end as jellyfin-web does", async () => {
+    // 10 s before the end of Akira, +30 s: the remote player handles the end.
+    answerSessions([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+        PlayState: { PositionTicks: 6.99e10, IsPaused: false },
+      },
+    ]);
+    apiMock()
+      .onPost(/\/Playing\/Seek/)
+      .reply(204);
+
+    await renderRemote(new QueryClient());
+    fireEvent.press(await screen.findByText("play-forward"));
+
+    await waitFor(() =>
+      expect(apiMock().history.post[0].url).toBe(
+        "https://jellyfin.example.com/Sessions/desktop-session/Playing/Seek?seekPositionTicks=70200000000",
+      ),
+    );
+  });
+
+  test("says the server is unreachable when the poll fails", async () => {
+    const mock = apiMock();
+    mock.reset();
+    mock.onGet(/\/Sessions/).reply(500);
+
+    await renderRemote(
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+    );
+
+    expect(
+      await screen.findByText("cast_targets.server_unreachable"),
+    ).toBeTruthy();
+    expect(screen.queryByText("cast_targets.nothing_playing")).toBeNull();
+  });
+
+  test("alerts when a command fails", async () => {
+    answerSessions([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+        PlayState: { PositionTicks: 6e8, IsPaused: false },
+      },
+    ]);
+    apiMock()
+      .onPost(/\/Playing\/Stop/)
+      .reply(401);
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+
+    await renderRemote(new QueryClient());
+    fireEvent.press(await screen.findByText("stop-circle-outline"));
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith(
+        "player.client_error",
+        "cast_targets.command_failed",
+      ),
+    );
+    alert.mockRestore();
   });
 });

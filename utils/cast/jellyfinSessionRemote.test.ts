@@ -48,17 +48,15 @@ describe("readRemotePlaybackState", () => {
 });
 
 describe("skipTargetTicks", () => {
+  // As jellyfin-web's seekRelative: floored at the start only, a seek past
+  // the end is the remote player's to handle.
   test.each([
-    [600_000_000, 30, 14_400_000_000, 900_000_000],
-    [100_000_000, -30, 14_400_000_000, 0],
-    [14_300_000_000, 30, 14_400_000_000, 14_400_000_000],
-    [600_000_000, 30, 0, 900_000_000],
-  ])(
-    "%d ticks skipped by %ds (runtime %d) → %d",
-    (position, skip, runtime, expected) => {
-      expect(skipTargetTicks(position, skip, runtime)).toBe(expected);
-    },
-  );
+    [600_000_000, 30, 900_000_000],
+    [100_000_000, -10, 0],
+    [14_300_000_000, 30, 14_600_000_000],
+  ])("%d ticks skipped by %ds → %d", (position, skip, expected) => {
+    expect(skipTargetTicks(position, skip)).toBe(expected);
+  });
 });
 
 describe("playOnJellyfinSession", () => {

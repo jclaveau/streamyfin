@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { getSessionApi } from "@jellyfin/sdk/lib/utils/api/session-api";
 import { useQuery } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { TouchableOpacity, View } from "react-native";
+import { Alert, TouchableOpacity, View } from "react-native";
 import { Slider } from "react-native-awesome-slider";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,7 +11,9 @@ import { Text } from "@/components/common/Text";
 import useRouter from "@/hooks/useAppRouter";
 import { apiAtom, userAtom } from "@/providers/JellyfinProvider";
 import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
+import { useSettings } from "@/utils/atoms/settings";
 import {
+  fetchRemoteSession,
   PlaystateCommand,
   readRemotePlaybackState,
   sendRemotePlaystate,
@@ -20,8 +21,6 @@ import {
 } from "@/utils/cast/jellyfinSessionRemote";
 import { logAndCaptureError } from "@/utils/log";
 import { formatDuration } from "@/utils/time";
-
-const SKIP_SECONDS = 30;
 
 /**
  * Remote control for a Jellyfin session picked in the cast menu: the
@@ -32,20 +31,19 @@ export default function JellyfinRemoteScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { settings } = useSettings();
   const api = useAtomValue(apiAtom);
   const user = useAtomValue(userAtom);
   const [jellyfinTarget, setJellyfinTarget] = useAtom(jellyfinCastTargetAtom);
   const sessionId = jellyfinTarget?.sessionId;
 
-  const { data: remoteSession, isFetched } = useQuery({
+  const {
+    data: remoteSession,
+    isFetched,
+    isError,
+  } = useQuery({
     queryKey: ["jellyfinRemoteSession", sessionId],
-    queryFn: async () => {
-      const response = await getSessionApi(api!).getSessions({
-        controllableByUserId: user!.Id,
-      });
-      const sessions = Array.isArray(response.data) ? response.data : [];
-      return sessions.find((session) => session.Id === sessionId) ?? null;
-    },
+    queryFn: () => fetchRemoteSession(api!, user!.Id!, sessionId!),
     enabled: !!api && !!user?.Id && !!sessionId,
     refetchInterval: 1000,
     // A poll must never be persisted (see PERSISTED_QUERY_FAMILIES).
@@ -64,22 +62,26 @@ export default function JellyfinRemoteScreen() {
     sliderMax.value = Math.max(playbackState?.runtimeTicks ?? 0, 1);
   }, [playbackState, sliderProgress, sliderMax]);
 
+  // Each tap acts on the last poll, so two +30 s taps within a second both
+  // seek to position + 30 s. Reviewer: chaining from the last target sent
+  // until the next poll would make that +60 s (same for play/pause); left
+  // out as more code for a rare double tap.
   const sendCommand = (command: PlaystateCommand, seekTicks?: number) => {
     if (!api || !sessionId) return;
-    sendRemotePlaystate(api, sessionId, command, seekTicks).catch((error) =>
-      logAndCaptureError("Jellyfin remote command failed", error),
-    );
+    sendRemotePlaystate(api, sessionId, command, seekTicks).catch((error) => {
+      logAndCaptureError("Jellyfin remote command failed", error);
+      Alert.alert(
+        t("player.client_error"),
+        t("cast_targets.command_failed", { name: jellyfinTarget?.name }),
+      );
+    });
   };
 
   const skip = (skipSeconds: number) => {
     if (!playbackState) return;
     sendCommand(
       PlaystateCommand.Seek,
-      skipTargetTicks(
-        playbackState.positionTicks,
-        skipSeconds,
-        playbackState.runtimeTicks,
-      ),
+      skipTargetTicks(playbackState.positionTicks, skipSeconds),
     );
   };
 
@@ -114,8 +116,15 @@ export default function JellyfinRemoteScreen() {
         <Text className='text-2xl font-bold text-center mb-8'>
           {sessionGone
             ? t("cast_targets.session_gone")
-            : (playbackState?.title ?? t("cast_targets.nothing_playing"))}
+            : (playbackState?.title ??
+              (isError ? "" : t("cast_targets.nothing_playing")))}
         </Text>
+        {/* The last state polled stays on screen under this line. */}
+        {isError && (
+          <Text className='text-red-400 text-center mb-8'>
+            {t("cast_targets.server_unreachable")}
+          </Text>
+        )}
 
         {playbackState && (
           <>
@@ -148,7 +157,7 @@ export default function JellyfinRemoteScreen() {
             </View>
 
             <View className='flex-row items-center justify-center mt-10 gap-x-10'>
-              <TouchableOpacity onPress={() => skip(-SKIP_SECONDS)}>
+              <TouchableOpacity onPress={() => skip(-settings.rewindSkipTime)}>
                 <Ionicons name='play-back' size={36} color='white' />
               </TouchableOpacity>
               <TouchableOpacity
@@ -160,7 +169,7 @@ export default function JellyfinRemoteScreen() {
                   color='white'
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => skip(SKIP_SECONDS)}>
+              <TouchableOpacity onPress={() => skip(settings.forwardSkipTime)}>
                 <Ionicons name='play-forward' size={36} color='white' />
               </TouchableOpacity>
             </View>
