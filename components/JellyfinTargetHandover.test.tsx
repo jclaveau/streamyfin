@@ -5,7 +5,12 @@ import type { makeApi } from "@/test-utils/jellyfinApi";
 import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
 import { JellyfinTargetHandover } from "./JellyfinTargetHandover";
 
-const mockStartedListeners: (() => void)[] = [];
+const mockStartedListeners = new Set<() => void>();
+// What the native SDK does: every listener still subscribed hears the start.
+const startChromecastSession = () =>
+  mockStartedListeners.forEach((listener) => {
+    listener();
+  });
 
 jest.mock(
   "@/providers/JellyfinProvider",
@@ -17,8 +22,8 @@ jest.mock("react-native-google-cast", () => ({
   default: {
     getSessionManager: () => ({
       onSessionStarted: (listener: () => void) => {
-        mockStartedListeners.push(listener);
-        return { remove: () => {} };
+        mockStartedListeners.add(listener);
+        return { remove: () => mockStartedListeners.delete(listener) };
       },
     }),
   },
@@ -45,7 +50,7 @@ describe("JellyfinTargetHandover", () => {
         <JellyfinTargetHandover />
       </JotaiProvider>,
     );
-    mockStartedListeners.at(-1)?.();
+    startChromecastSession();
 
     await waitFor(() =>
       expect(mock.history.post.map((request) => request.url)).toEqual([
@@ -53,6 +58,42 @@ describe("JellyfinTargetHandover", () => {
       ]),
     );
     expect(store.get(jellyfinCastTargetAtom)).toBeNull();
+  });
+
+  test("a Chromecast session start stops only the Jellyfin player picked last", async () => {
+    const { mock } = createStore().get(apiAtom) as unknown as ReturnType<
+      typeof makeApi
+    >;
+    mock.reset();
+    mock.onPost(/\/Playing\/Stop/).reply(204);
+    const store = createStore();
+    store.set(jellyfinCastTargetAtom, {
+      kind: "jellyfin-session",
+      sessionId: "desktop-session",
+      name: "maison-titateur",
+      clientName: "Jellyfin Desktop",
+    });
+    await render(
+      <JotaiProvider store={store}>
+        <JellyfinTargetHandover />
+      </JotaiProvider>,
+    );
+    await act(() =>
+      store.set(jellyfinCastTargetAtom, {
+        kind: "jellyfin-session",
+        sessionId: "tv-session",
+        name: "salon",
+        clientName: "Jellyfin Android TV",
+      }),
+    );
+
+    startChromecastSession();
+
+    await waitFor(() =>
+      expect(mock.history.post.map((request) => request.url)).toEqual([
+        "https://jellyfin.example.com/Sessions/tv-session/Playing/Stop",
+      ]),
+    );
   });
 
   test("logging out drops the Jellyfin player", async () => {
