@@ -96,6 +96,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   config.android = {
     ...config.android,
     package: "io.github.jclaveau.streamyfin",
+    // fork-release.yml passes its run number, so each release installs as an
+    // update over the previous one.
+    ...(process.env.FORK_VERSION_CODE && {
+      versionCode: Number(process.env.FORK_VERSION_CODE),
+    }),
   };
   delete config.android.googleServicesFile;
 

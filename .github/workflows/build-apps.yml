@@ -14,12 +14,8 @@ on:
         description: Build every app in full, without repacking an earlier build
         type: boolean
         default: false
-  # Every repack uploads the binary it started from again, so without this a
-  # native binary could be reused for months, built with a toolchain long
-  # gone. A weekly full build on develop gives every later repack a binary at
-  # most a week old.
-  schedule:
-    - cron: "0 3 * * 1"
+  # Fork: the upstream weekly cron is dropped; on develop-custom it ran the
+  # signed iOS build, which always fails without EXPO_TOKEN.
   pull_request:
     branches: [develop, master, develop-custom]
   merge_group:

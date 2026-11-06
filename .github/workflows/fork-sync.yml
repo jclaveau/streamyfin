@@ -1,0 +1,59 @@
+name: 🔄 Fork Sync (upstream develop → develop-custom)
+
+# Merges streamyfin/streamyfin develop into develop-custom once a day. The push
+# uses SYNC_TOKEN, a fine-grained token on this repo with Contents + Workflows
+# read/write: GITHUB_TOKEN can neither push upstream changes to
+# .github/workflows nor trigger fork-release.yml with its push.
+# A merge conflict fails the job; resolve it by hand on develop-custom.
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  merge-upstream:
+    if: ${{ github.repository == 'jclaveau/streamyfin' }}
+    runs-on: ubuntu-26.04
+    name: 🔀 Merge upstream develop
+    permissions:
+      contents: read
+
+    steps:
+      - name: 🔑 Require SYNC_TOKEN
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [ -z "$SYNC_TOKEN" ]; then
+            echo "::error::Secret SYNC_TOKEN is not set (fine-grained token on jclaveau/streamyfin: Contents + Workflows read/write)."
+            exit 1
+          fi
+
+      - name: 📥 Checkout develop-custom
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: develop-custom
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+          show-progress: false
+
+      - name: 🔀 Merge and push
+        run: |
+          git config user.name "Jean Claveau"
+          git config user.email "1556489+jclaveau@users.noreply.github.com"
+          git remote add upstream https://github.com/streamyfin/streamyfin.git
+          git fetch --no-tags upstream develop
+          if git merge-base --is-ancestor upstream/develop HEAD; then
+            echo "develop-custom already contains upstream develop."
+            exit 0
+          fi
+          if ! git merge --no-edit upstream/develop; then
+            git merge --abort
+            echo "::error::Merging upstream develop into develop-custom conflicts; resolve it by hand."
+            exit 1
+          fi
+          git push origin HEAD:develop-custom
