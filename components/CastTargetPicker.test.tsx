@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import { createStore, Provider as JotaiProvider } from "jotai";
+import { Alert } from "react-native";
 import { useCastDevice } from "react-native-google-cast";
 import { apiAtom } from "@/providers/JellyfinProvider";
 import type { makeApi } from "@/test-utils/jellyfinApi";
@@ -30,7 +31,10 @@ jest.mock("react-native-google-cast", () => ({
   useDevices: () => [],
 }));
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: object) =>
+      params ? `${key} ${JSON.stringify(params)}` : key,
+  }),
 }));
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -68,7 +72,7 @@ const renderPicker = async (
 };
 
 describe("CastTargetPicker", () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => jest.restoreAllMocks());
 
   test("stops the previous Jellyfin player when another one is picked", async () => {
     const store = createStore();
@@ -99,7 +103,8 @@ describe("CastTargetPicker", () => {
     });
   });
 
-  test("picks the Jellyfin player even when ending the Chromecast session fails", async () => {
+  test("keeps the Chromecast when ending its session fails", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
     const store = createStore();
     jest
       .mocked(useCastDevice)
@@ -120,7 +125,11 @@ describe("CastTargetPicker", () => {
     fireEvent.press(await screen.findByText("maison-titateur"));
 
     await waitFor(() =>
-      expect(store.get(jellyfinCastTargetAtom)).toEqual(maisonTitateur),
+      expect(alert).toHaveBeenCalledWith(
+        "player.client_error",
+        'cast_targets.chromecast_still_connected {"name":"Salon TV"}',
+      ),
     );
+    expect(store.get(jellyfinCastTargetAtom)).toBeNull();
   });
 });

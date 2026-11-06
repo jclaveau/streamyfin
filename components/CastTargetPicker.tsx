@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai";
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Alert,
   FlatList,
   Modal,
   StyleSheet,
@@ -63,12 +64,19 @@ export const CastTargetPicker: React.FC<Props> = ({ visible, onClose }) => {
       }
       return;
     }
-    // The Jellyfin player does not depend on the Chromecast: it is picked
-    // even when ending the Chromecast session fails.
+    // A Chromecast still connected would keep the play button, so the
+    // Jellyfin player is not picked.
     try {
       if (castDevice) await endChromecastSession();
     } catch (error) {
       logAndCaptureError("Ending the cast session failed", error);
+      Alert.alert(
+        t("player.client_error"),
+        t("cast_targets.chromecast_still_connected", {
+          name: castDevice?.friendlyName,
+        }),
+      );
+      return;
     }
     if (
       api &&
