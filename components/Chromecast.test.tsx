@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -11,6 +12,7 @@ import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
 import { Chromecast } from "./Chromecast";
 
 const mockRouterPush = jest.fn();
+let mockCastButtonPress: () => Promise<void>;
 
 jest.mock(
   "@/providers/JellyfinProvider",
@@ -41,13 +43,16 @@ jest.mock("./common/HeaderButton", () => {
       onPress,
       children,
     }: {
-      onPress: () => void;
+      onPress: () => Promise<void>;
       children: React.ReactNode;
-    }) => (
-      <TouchableOpacity testID='cast-button' onPress={onPress}>
-        {children}
-      </TouchableOpacity>
-    ),
+    }) => {
+      mockCastButtonPress = onPress;
+      return (
+        <TouchableOpacity testID='cast-button' onPress={onPress}>
+          {children}
+        </TouchableOpacity>
+      );
+    },
   };
 });
 jest.mock("./common/HeaderIcon", () => ({ HeaderIcon: () => null }));
@@ -96,6 +101,22 @@ describe("Chromecast header button with a Jellyfin player picked", () => {
     await waitFor(() =>
       expect(mockRouterPush).toHaveBeenCalledWith("/(auth)/jellyfin-remote"),
     );
+  });
+
+  test("opens the remote once for a double tap", async () => {
+    await renderWithMaisonTitateur([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+      },
+    ]);
+
+    // Both taps land before the first read of the player answers.
+    await act(() =>
+      Promise.all([mockCastButtonPress(), mockCastButtonPress()]),
+    );
+
+    expect(mockRouterPush.mock.calls).toEqual([["/(auth)/jellyfin-remote"]]);
   });
 
   test("opens the picker while nothing plays there", async () => {

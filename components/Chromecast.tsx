@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import GoogleCast, {
   CastButton,
@@ -39,6 +39,7 @@ export function Chromecast(props: Props) {
   const user = useAtomValue(userAtom);
   const router = useRouter();
   const [isPickerVisible, setPickerVisible] = useState(false);
+  const isReadingRemote = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -60,14 +61,21 @@ export function Chromecast(props: Props) {
         // As for a Chromecast: the remote only while something plays there,
         // the picker otherwise.
         if (jellyfinTarget && api && user?.Id) {
+          // A second tap during the read would open a second remote.
+          if (isReadingRemote.current) return;
+          isReadingRemote.current = true;
           const remoteSession = await fetchRemoteSession(
             api,
             user.Id,
             jellyfinTarget.sessionId,
-          ).catch((error) => {
-            logAndCaptureError("Reading the Jellyfin player failed", error);
-            return null;
-          });
+          )
+            .catch((error) => {
+              logAndCaptureError("Reading the Jellyfin player failed", error);
+              return null;
+            })
+            .finally(() => {
+              isReadingRemote.current = false;
+            });
           if (remoteSession && readRemotePlaybackState(remoteSession)) {
             router.push("/(auth)/jellyfin-remote");
             return;
