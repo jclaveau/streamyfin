@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,8 +14,13 @@ import GoogleCast, {
   useCastDevice,
 } from "react-native-google-cast";
 import { useCastTargets } from "@/hooks/useCastTargets";
+import { apiAtom } from "@/providers/JellyfinProvider";
 import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
 import type { CastTarget } from "@/utils/cast/castTargets";
+import {
+  PlaystateCommand,
+  sendRemotePlaystate,
+} from "@/utils/cast/jellyfinSessionRemote";
 import { logAndCaptureError } from "@/utils/log";
 import { Text } from "./common/Text";
 
@@ -33,6 +38,7 @@ export const CastTargetPicker: React.FC<Props> = ({ visible, onClose }) => {
   const { t } = useTranslation();
   const castTargets = useCastTargets(visible);
   const castDevice = useCastDevice();
+  const api = useAtomValue(apiAtom);
   const [jellyfinTarget, setJellyfinTarget] = useAtom(jellyfinCastTargetAtom);
   const isConnected = !!castDevice || !!jellyfinTarget;
 
@@ -44,19 +50,43 @@ export const CastTargetPicker: React.FC<Props> = ({ visible, onClose }) => {
   const endChromecastSession = () =>
     GoogleCast.getSessionManager().endCurrentSession(true);
 
+  // Casting somewhere stops the previous cast. A Chromecast's start stops
+  // the Jellyfin player in JellyfinTargetHandover, which also covers the
+  // native Cast dialog.
   const selectTarget = async (target: CastTarget) => {
     onClose();
-    try {
-      if (target.kind === "chromecast") {
-        setJellyfinTarget(null);
+    if (target.kind === "chromecast") {
+      try {
         await GoogleCast.getSessionManager().startSession(target.deviceId);
-        return;
+      } catch (error) {
+        logAndCaptureError("Starting a Chromecast session failed", error);
       }
-      if (castDevice) await endChromecastSession();
-      setJellyfinTarget(target);
-    } catch (error) {
-      logAndCaptureError("Selecting a cast target failed", error);
+      return;
     }
+    // The Jellyfin player does not depend on the Chromecast: it is picked
+    // even when ending the Chromecast session fails.
+    try {
+      if (castDevice) await endChromecastSession();
+    } catch (error) {
+      logAndCaptureError("Ending the cast session failed", error);
+    }
+    if (
+      api &&
+      jellyfinTarget &&
+      jellyfinTarget.sessionId !== target.sessionId
+    ) {
+      sendRemotePlaystate(
+        api,
+        jellyfinTarget.sessionId,
+        PlaystateCommand.Stop,
+      ).catch((error) =>
+        logAndCaptureError(
+          "Stopping the previous Jellyfin player failed",
+          error,
+        ),
+      );
+    }
+    setJellyfinTarget(target);
   };
 
   const disconnect = async () => {
