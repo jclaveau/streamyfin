@@ -48,6 +48,8 @@ export default function JellyfinRemoteScreen() {
     },
     enabled: !!api && !!user?.Id && !!sessionId,
     refetchInterval: 1000,
+    // A poll must never be persisted (see PERSISTED_QUERY_FAMILIES).
+    gcTime: 0,
   });
 
   const playbackState = remoteSession

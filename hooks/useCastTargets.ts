@@ -30,6 +30,8 @@ export const useCastTargets = (enabled: boolean): CastTarget[] => {
     },
     enabled: enabled && !!api && !!user?.Id,
     refetchInterval: 5 * 1000,
+    // A poll must never be persisted (see PERSISTED_QUERY_FAMILIES).
+    gcTime: 0,
   });
 
   return useMemo(
