@@ -10,7 +10,12 @@ import GoogleCast, {
   useRemoteMediaClient,
 } from "react-native-google-cast";
 import useRouter from "@/hooks/useAppRouter";
+import { apiAtom, userAtom } from "@/providers/JellyfinProvider";
 import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
+import {
+  fetchRemoteSession,
+  readRemotePlaybackState,
+} from "@/utils/cast/jellyfinSessionRemote";
 import { logAndCaptureError } from "@/utils/log";
 import { CastTargetPicker } from "./CastTargetPicker";
 import { HeaderButton, type HeaderButtonProps } from "./common/HeaderButton";
@@ -30,6 +35,8 @@ export function Chromecast(props: Props) {
   const discoveryManager = GoogleCast.getDiscoveryManager();
   const mediaStatus = useMediaStatus();
   const jellyfinTarget = useAtomValue(jellyfinCastTargetAtom);
+  const api = useAtomValue(apiAtom);
+  const user = useAtomValue(userAtom);
   const router = useRouter();
   const [isPickerVisible, setPickerVisible] = useState(false);
 
@@ -49,11 +56,25 @@ export function Chromecast(props: Props) {
 
   return (
     <HeaderButton
-      onPress={() => {
-        if (jellyfinTarget) router.push("/(auth)/jellyfin-remote");
-        else if (mediaStatus?.currentItemId) {
-          CastContext.showExpandedControls();
-        } else setPickerVisible(true);
+      onPress={async () => {
+        // As for a Chromecast: the remote only while something plays there,
+        // the picker otherwise.
+        if (jellyfinTarget && api && user?.Id) {
+          const remoteSession = await fetchRemoteSession(
+            api,
+            user.Id,
+            jellyfinTarget.sessionId,
+          ).catch((error) => {
+            logAndCaptureError("Reading the Jellyfin player failed", error);
+            return null;
+          });
+          if (remoteSession && readRemotePlaybackState(remoteSession)) {
+            router.push("/(auth)/jellyfin-remote");
+            return;
+          }
+        }
+        if (mediaStatus?.currentItemId) CastContext.showExpandedControls();
+        else setPickerVisible(true);
       }}
       {...props}
     >
