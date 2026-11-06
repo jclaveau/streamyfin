@@ -119,22 +119,25 @@ export default function JellyfinRemoteScreen() {
 
         {playbackState && (
           <>
-            <Slider
-              theme={{
-                maximumTrackTintColor: "rgba(255,255,255,0.2)",
-                minimumTrackTintColor: "#fff",
-              }}
-              progress={sliderProgress}
-              minimumValue={sliderMin}
-              maximumValue={sliderMax}
-              onSlidingComplete={(ticks) =>
-                sendCommand(PlaystateCommand.Seek, Math.round(ticks))
-              }
-              renderThumb={() => null}
-              renderBubble={() => null}
-              sliderHeight={8}
-              containerStyle={{ borderRadius: 100 }}
-            />
+            {/* No runtime (live TV): the bar would span 0..1 tick and seek to 0. */}
+            {playbackState.runtimeTicks > 0 && (
+              <Slider
+                theme={{
+                  maximumTrackTintColor: "rgba(255,255,255,0.2)",
+                  minimumTrackTintColor: "#fff",
+                }}
+                progress={sliderProgress}
+                minimumValue={sliderMin}
+                maximumValue={sliderMax}
+                onSlidingComplete={(ticks) =>
+                  sendCommand(PlaystateCommand.Seek, Math.round(ticks))
+                }
+                renderThumb={() => null}
+                renderBubble={() => null}
+                sliderHeight={8}
+                containerStyle={{ borderRadius: 100 }}
+              />
+            )}
             <View className='flex-row justify-between mt-2'>
               <Text className='text-neutral-500 text-xs'>
                 {formatDuration(playbackState.positionTicks)}
