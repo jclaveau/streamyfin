@@ -1,5 +1,9 @@
+import { makeApi } from "@/test-utils/jellyfinApi";
 import {
+  PlaystateCommand,
+  playOnJellyfinSession,
   readRemotePlaybackState,
+  sendRemotePlaystate,
   skipTargetTicks,
 } from "./jellyfinSessionRemote";
 
@@ -55,4 +59,41 @@ describe("skipTargetTicks", () => {
       expect(skipTargetTicks(position, skip, runtime)).toBe(expected);
     },
   );
+});
+
+describe("playOnJellyfinSession", () => {
+  test("sends PlayNow with the resume point and the picked streams", async () => {
+    const api = makeApi();
+    api.mock.onPost(/\/Sessions\/desktop-session\/Playing/).reply(204);
+
+    await playOnJellyfinSession(api, "desktop-session", {
+      itemId: "movie-1",
+      startPositionTicks: 600_000_000,
+      mediaSourceId: "source-1",
+      audioStreamIndex: 2,
+      subtitleStreamIndex: 5,
+    });
+
+    expect(api.mock.history.post[0].url).toBe(
+      "https://jellyfin.example.com/Sessions/desktop-session/Playing?playCommand=PlayNow&itemIds=movie-1&startPositionTicks=600000000&mediaSourceId=source-1&audioStreamIndex=2&subtitleStreamIndex=5",
+    );
+  });
+});
+
+describe("sendRemotePlaystate", () => {
+  test("sends a seek with its target position", async () => {
+    const api = makeApi();
+    api.mock.onPost(/\/Sessions\/desktop-session\/Playing\/Seek/).reply(204);
+
+    await sendRemotePlaystate(
+      api,
+      "desktop-session",
+      PlaystateCommand.Seek,
+      900_000_000,
+    );
+
+    expect(api.mock.history.post[0].url).toBe(
+      "https://jellyfin.example.com/Sessions/desktop-session/Playing/Seek?seekPositionTicks=900000000",
+    );
+  });
 });
