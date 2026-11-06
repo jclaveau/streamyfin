@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useAtomValue } from "jotai";
+import { useEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import GoogleCast, {
   CastButton,
@@ -8,7 +9,15 @@ import GoogleCast, {
   useMediaStatus,
   useRemoteMediaClient,
 } from "react-native-google-cast";
+import useRouter from "@/hooks/useAppRouter";
+import { apiAtom, userAtom } from "@/providers/JellyfinProvider";
+import { jellyfinCastTargetAtom } from "@/utils/atoms/jellyfinCastTarget";
+import {
+  fetchRemoteSession,
+  readRemotePlaybackState,
+} from "@/utils/cast/jellyfinSessionRemote";
 import { logAndCaptureError } from "@/utils/log";
+import { CastTargetPicker } from "./CastTargetPicker";
 import { HeaderButton, type HeaderButtonProps } from "./common/HeaderButton";
 import { HeaderIcon } from "./common/HeaderIcon";
 
@@ -25,6 +34,12 @@ export function Chromecast(props: Props) {
   const sessionManager = GoogleCast.getSessionManager();
   const discoveryManager = GoogleCast.getDiscoveryManager();
   const mediaStatus = useMediaStatus();
+  const jellyfinTarget = useAtomValue(jellyfinCastTargetAtom);
+  const api = useAtomValue(apiAtom);
+  const user = useAtomValue(userAtom);
+  const router = useRouter();
+  const [isPickerVisible, setPickerVisible] = useState(false);
+  const isReadingRemote = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -42,9 +57,32 @@ export function Chromecast(props: Props) {
 
   return (
     <HeaderButton
-      onPress={() => {
+      onPress={async () => {
+        // As for a Chromecast: the remote only while something plays there,
+        // the picker otherwise.
+        if (jellyfinTarget && api && user?.Id) {
+          // A second tap during the read would open a second remote.
+          if (isReadingRemote.current) return;
+          isReadingRemote.current = true;
+          const remoteSession = await fetchRemoteSession(
+            api,
+            user.Id,
+            jellyfinTarget.sessionId,
+          )
+            .catch((error) => {
+              logAndCaptureError("Reading the Jellyfin player failed", error);
+              return null;
+            })
+            .finally(() => {
+              isReadingRemote.current = false;
+            });
+          if (remoteSession && readRemotePlaybackState(remoteSession)) {
+            router.push("/(auth)/jellyfin-remote");
+            return;
+          }
+        }
         if (mediaStatus?.currentItemId) CastContext.showExpandedControls();
-        else CastContext.showCastDialog();
+        else setPickerVisible(true);
       }}
       {...props}
     >
@@ -57,6 +95,10 @@ export function Chromecast(props: Props) {
         </View>
       ) : null}
       <HeaderIcon name='cast' />
+      <CastTargetPicker
+        visible={isPickerVisible}
+        onClose={() => setPickerVisible(false)}
+      />
     </HeaderButton>
   );
 }

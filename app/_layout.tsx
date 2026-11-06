@@ -55,6 +55,9 @@ const Notifications = !Platform.isTV ? require("expo-notifications") : null;
 const JellyfinCastStopReporter = Platform.isTV
   ? null
   : require("@/components/JellyfinCastStopReporter").JellyfinCastStopReporter;
+const JellyfinTargetHandover = Platform.isTV
+  ? null
+  : require("@/components/JellyfinTargetHandover").JellyfinTargetHandover;
 
 import { getSessionApi } from "@jellyfin/sdk/lib/utils/api/session-api";
 import { getLocales } from "expo-localization";
@@ -341,6 +344,9 @@ function Layout() {
                                       {JellyfinCastStopReporter && (
                                         <JellyfinCastStopReporter />
                                       )}
+                                      {JellyfinTargetHandover && (
+                                        <JellyfinTargetHandover />
+                                      )}
                                       <Stack initialRouteName='(auth)/(tabs)'>
                                         <Stack.Screen
                                           name='(auth)/(tabs)'
@@ -360,6 +366,14 @@ function Layout() {
                                         />
                                         <Stack.Screen
                                           name='(auth)/now-playing'
+                                          options={{
+                                            headerShown: false,
+                                            presentation: "modal",
+                                            gestureEnabled: true,
+                                          }}
+                                        />
+                                        <Stack.Screen
+                                          name='(auth)/jellyfin-remote'
                                           options={{
                                             headerShown: false,
                                             presentation: "modal",
