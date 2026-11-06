@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react-native";
+import { act, render, waitFor } from "@testing-library/react-native";
 import { createStore, Provider as JotaiProvider } from "jotai";
 import { apiAtom } from "@/providers/JellyfinProvider";
 import type { makeApi } from "@/test-utils/jellyfinApi";
@@ -52,6 +52,26 @@ describe("JellyfinTargetHandover", () => {
         "https://jellyfin.example.com/Sessions/desktop-session/Playing/Stop",
       ]),
     );
+    expect(store.get(jellyfinCastTargetAtom)).toBeNull();
+  });
+
+  test("logging out drops the Jellyfin player", async () => {
+    const store = createStore();
+    store.set(jellyfinCastTargetAtom, {
+      kind: "jellyfin-session",
+      sessionId: "desktop-session",
+      name: "maison-titateur",
+      clientName: "Jellyfin Desktop",
+    });
+    await render(
+      <JotaiProvider store={store}>
+        <JellyfinTargetHandover />
+      </JotaiProvider>,
+    );
+
+    // clearSessionState, on logout as on session expiry.
+    await act(() => store.set(apiAtom, null as never));
+
     expect(store.get(jellyfinCastTargetAtom)).toBeNull();
   });
 });
