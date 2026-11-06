@@ -31,7 +31,10 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: object) =>
+      params ? `${key} ${JSON.stringify(params)}` : key,
+  }),
 }));
 jest.mock("@/hooks/useAppRouter", () => ({
   __esModule: true,
@@ -80,6 +83,8 @@ const answerSessions = (sessions: unknown[]) => {
 };
 
 describe("Jellyfin remote screen", () => {
+  afterEach(() => jest.restoreAllMocks());
+
   test("hides the seek bar while the remote item has no runtime", async () => {
     // A live TV channel reports RunTimeTicks 0: a bar from 0 to 1 tick sent
     // every release as a Seek to 0:00, restarting playback.
@@ -207,9 +212,34 @@ describe("Jellyfin remote screen", () => {
     await waitFor(() =>
       expect(alert).toHaveBeenCalledWith(
         "player.client_error",
-        "cast_targets.command_failed",
+        'cast_targets.command_failed {"name":"maison-titateur"}',
       ),
     );
-    alert.mockRestore();
+  });
+
+  test("keeps the seek bar under the finger while a poll lands", async () => {
+    answerSessions([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+        PlayState: { PositionTicks: 6e8, IsPaused: false },
+      },
+    ]);
+    await renderRemote(new QueryClient());
+    const seekBar = await screen.findByTestId("seek-bar");
+
+    // The finger holds the bar at 50 min; the server still plays at 1:10.
+    seekBar.props.onSlidingStart?.();
+    seekBar.props.progress.value = 3e10;
+    answerSessions([
+      {
+        Id: "desktop-session",
+        NowPlayingItem: { Id: "movie-1", Name: "Akira", RunTimeTicks: 7e10 },
+        PlayState: { PositionTicks: 7e8, IsPaused: false },
+      },
+    ]);
+    expect(await screen.findByText("1:10", {}, { timeout: 3000 })).toBeTruthy();
+
+    expect(seekBar.props.progress.value).toBe(3e10);
   });
 });

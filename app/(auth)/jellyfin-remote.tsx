@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, TouchableOpacity, View } from "react-native";
 import { Slider } from "react-native-awesome-slider";
@@ -57,7 +57,10 @@ export default function JellyfinRemoteScreen() {
   const sliderProgress = useSharedValue(0);
   const sliderMin = useSharedValue(0);
   const sliderMax = useSharedValue(1);
+  // A poll landing mid-drag would pull the bar from under the finger.
+  const isScrubbing = useRef(false);
   useEffect(() => {
+    if (isScrubbing.current) return;
     sliderProgress.value = playbackState?.positionTicks ?? 0;
     sliderMax.value = Math.max(playbackState?.runtimeTicks ?? 0, 1);
   }, [playbackState, sliderProgress, sliderMax]);
@@ -138,9 +141,13 @@ export default function JellyfinRemoteScreen() {
                 progress={sliderProgress}
                 minimumValue={sliderMin}
                 maximumValue={sliderMax}
-                onSlidingComplete={(ticks) =>
-                  sendCommand(PlaystateCommand.Seek, Math.round(ticks))
-                }
+                onSlidingStart={() => {
+                  isScrubbing.current = true;
+                }}
+                onSlidingComplete={(ticks) => {
+                  isScrubbing.current = false;
+                  sendCommand(PlaystateCommand.Seek, Math.round(ticks));
+                }}
                 renderThumb={() => null}
                 renderBubble={() => null}
                 sliderHeight={8}
