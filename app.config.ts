@@ -87,6 +87,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     }
   }
 
+  // This fork's own application id lets it install next to the official app,
+  // and as a "foreign" id (utils/sentry.ts applicationIdKind) it never reports
+  // to the official Sentry project. google-services.json has a client for the
+  // official id only and the Gradle plugin refuses a build without one, so
+  // the fork ships without Firebase: no push notifications.
+  config.name = "Streamyfin Fork";
+  config.android = {
+    ...config.android,
+    package: "io.github.jclaveau.streamyfin",
+  };
+  delete config.android.googleServicesFile;
+
   // Only override googleServicesFile if env var is set
   const androidConfig: { googleServicesFile?: string } = {};
   if (process.env.GOOGLE_SERVICES_JSON) {
