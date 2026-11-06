@@ -3,7 +3,7 @@ name: 📝 PR Title
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
-    branches: [develop, master]
+    branches: [develop, master, develop-custom]
   merge_group:
     types: [checks_requested]
 

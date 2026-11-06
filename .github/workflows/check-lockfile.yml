@@ -2,11 +2,11 @@ name: 🔒 Lockfile Consistency Check
 
 on:
   pull_request:
-    branches: [develop, master]
+    branches: [develop, master, develop-custom]
   merge_group:
     types: [checks_requested]
   push:
-    branches: [develop, master]
+    branches: [develop, master, develop-custom]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

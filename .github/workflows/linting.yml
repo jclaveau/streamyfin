@@ -3,12 +3,12 @@ name: 🚦 Security & Quality Gate
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [develop, master]
+    branches: [develop, master, develop-custom]
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
   push:
-    branches: [develop]
+    branches: [develop, develop-custom]
 
 permissions:
   contents: read
